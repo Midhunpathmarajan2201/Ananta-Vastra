@@ -902,7 +902,7 @@ grant select on public.admin_cashbook_entries to authenticated;
 
 create or replace function public.admin_dashboard_summary(p_from date,p_to date)
 returns jsonb language plpgsql stable security definer set search_path=public,pg_temp
-as $
+  as $$
 declare v jsonb;
 begin
   if not public.is_admin() then raise exception 'Admin permission required'; end if;
@@ -918,7 +918,7 @@ begin
     'expense_total',(select coalesce(sum(e.amount),0) from public.cashbook_expenses e where e.expense_date between p_from and p_to)
   ) into v;
   return v;
-end $;
+end $$;
 
 create or replace function public.sales_dashboard_summary(p_from date,p_to date)
 returns jsonb language plpgsql stable security definer set search_path=public,pg_temp
