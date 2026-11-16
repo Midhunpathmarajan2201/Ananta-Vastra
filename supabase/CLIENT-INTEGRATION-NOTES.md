@@ -1,16 +1,30 @@
 # Supabase client configuration
 
-`client-config.js` stores the project's Supabase URL and browser publishable key.
-The publishable key is intended to be visible in a browser application. It does not
-replace authentication, Row Level Security (RLS), or server-side authorization.
+`client-config.js` contains the existing project's URL and public publishable key. The key is intended for browser use, but it does not replace authentication or Row Level Security.
 
-Before loading a Supabase client in the app:
+## Database and Admin setup
 
-1. Review and apply the database migrations in a fresh/test environment.
-2. Complete and test the missing RPCs and employee bootstrap/authentication flows.
-3. Verify RLS with separate Admin and Sales accounts, including direct API attempts.
-4. Configure OTP providers and redirect URLs in Supabase Auth.
-5. Only then initialize `supabase-js` in the app and replace local demo persistence.
+1. Follow the root `SUPABASE-SETUP-GUIDE.md`.
+2. Run `supabase/schema.sql` in the existing project's SQL Editor.
+3. Create the one owner Auth user in Authentication → Users. Public sign-ups must be disabled.
+4. Run `supabase/ADMIN-BOOTSTRAP-AFTER-AUTH-USER.sql` to create the sole Admin profile.
+5. Run `supabase/VERIFY-AFTER-SETUP.sql` and confirm tables, the nine categories, one Admin profile, RLS and the private product-photo bucket.
 
-Never add a `service_role` key, database password, or OTP provider secret to browser
-code, source control, or a client-side environment variable.
+## Sales account management
+
+Deploy `supabase/functions/manage-sales-employee` using the CLI instructions in the setup guide. The function checks the caller's active Admin profile before creating, editing, resetting, deactivating or reactivating Sales accounts. Sales login uses the username-to-internal-email convention in the setup guide.
+
+## Frontend integration still required
+
+The current `index.html` still uses browser `localStorage` and Admin/Sales preview selectors. Applying the SQL and deploying the function does **not** automatically connect the current UI. Before real inventory is entered, the frontend must be changed to:
+
+- initialize `supabase-js` using `client-config.js`;
+- replace localStorage business-data reads/writes with authenticated queries and transactional RPCs;
+- use Supabase Auth for Admin email/password and Sales username/password;
+- call `manage-sales-employee` for employee administration;
+- subscribe to the configured Realtime tables;
+- block writes whenever the backend is unavailable or the browser is offline.
+
+Do not enter real shop data until this frontend integration and the Admin/Sales RLS test matrix have passed.
+
+Never put a Supabase secret/service-role key, database password, or OTP provider credential in browser code or GitHub.

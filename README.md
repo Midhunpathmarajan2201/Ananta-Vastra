@@ -1,85 +1,38 @@
-# Ananta Vastra — mobile-first app prototype
+# Ananta Vastra — mobile-first shop management app
 
-**Version:** 1.0 UI demo  
-**Operating model:** Physical bill pad + online sales register + inventory management  
-**Demo status:** Interactive browser prototype; not yet connected to a live shared database.
+**Current application status:** interactive UI prototype; Supabase backend setup is provided but the browser UI is not yet connected to it.
 
-## Open the demo
+## Review the app
 
-1. Download and extract `ananta-vastra-final.zip`.
-2. Open the `ananta-vastra-app` folder.
-3. Open `index.html` in Chrome or Edge on a computer. The layout is responsive; use a phone-sized browser window or open it on an Android phone for the mobile layout.
-4. Use the role selector to switch between **Admin preview** and **Sales preview**. In Sales preview, choose an active sample employee.
-5. Try the flows below using sample data.
+1. Open `index.html` in Chrome or Edge, or host it on HTTPS for PWA installation.
+2. The current Admin/Sales role selector is preview-only.
+3. Sample inventory, bills and employee records are stored in browser `localStorage`; they are not shared between devices.
 
-The ChatGPT attachment preview may not support every HTML form control and date picker. Downloading/extracting the ZIP and opening `index.html` in a normal browser gives the intended interactive experience.
+Do not enter real customer, employee, inventory or financial data in the current prototype.
 
-## Main demo flows
+## Existing Supabase backend setup
 
-### Admin preview
-- Browse category-first inventory and size/colour variants.
-- Create and edit categories, products and variants.
-- Set category-specific product-code prefixes.
-- Set variant prices and stock thresholds.
-- Review the physical bill register and correct/cancel a bill with a reason.
-- Review customer groups and purchase history.
-- Maintain suppliers and purchase invoices.
-- Review Cashbook collections and expenses.
-- View day, week, month and custom-date reports; export reports.
-- Manage sample employee profiles and activity history.
-- Review notifications and settings.
+The repository now contains the initial V1 database and authentication setup for project `hctqowxkhdouclbqvejh`:
 
-### Sales preview
-- View active categories, products, variants and quantities.
-- Add stock only to a variant already created by Admin.
-- Enter each physical paper bill separately, including multiple product lines.
-- Record customer name, optional phone, paper bill date and number, sold-by employee, payment split and actual amounts.
-- View the employee's permitted sales information.
+- `supabase/schema.sql` — tables, indexes, RLS, functions/RPCs, nine agreed categories, expense categories, private product-photo bucket and Realtime publication membership.
+- `supabase/ADMIN-BOOTSTRAP-AFTER-AUTH-USER.sql` — one-time Admin profile creation after the owner Auth user is created in the Dashboard.
+- `supabase/VERIFY-AFTER-SETUP.sql` — post-install checks.
+- `supabase/functions/manage-sales-employee/` — Admin-only Sales account creation, profile updates, password reset, deactivation and reactivation.
+- `SUPABASE-SETUP-GUIDE.md` — step-by-step instructions for the existing Supabase project.
 
-The demo is seeded with **illustrative sample data**. Do not mistake those bills, names, stock quantities or rupee amounts for your shop's actual records.
+Read `SUPABASE-SETUP-GUIDE.md` before running the SQL. The SQL does not create an Auth password: create the owner user in Supabase Authentication → Users, then run the Admin bootstrap script. Public sign-ups must be disabled.
 
-## Demo data and privacy
+## Important release boundary
 
-- Changes are stored in browser `localStorage` on the current device/browser only.
-- The role selector is a preview control, **not authentication**.
-- There is no real Admin login, Sales login, server-side permission enforcement, shared cloud database or cross-device synchronisation in this demo.
-- Browser notification display is not the production phone-push service.
-- Do not enter real customer information, employee credentials, supplier invoices or financial data into this prototype.
-- Use **Settings → Download JSON backup** to export the current demo state. **Reset sample data** restores the initial examples.
+The SQL and Edge Function establish the backend layer; they do not wire the existing `index.html` to Supabase. Real shop use remains blocked until frontend authentication, database reads/RPC writes, realtime subscriptions, online-only enforcement and Admin/Sales permission tests are completed. Keep the currently deployed review site unchanged until those checks pass.
 
-## Online-only behaviour
+Email and SMS password recovery are intentionally deferred from this initial setup. Supplier Management is excluded from this V1 release.
 
-The physical shop can continue to write customer bills in the paper bill pad when the internet is unavailable. The app is designed to require internet for saving digital sales/stock transactions. In this local prototype, transaction saves are blocked when the browser reports offline. This browser network check does not prove that a production database is reachable; the live app must also verify its backend connection and transaction response.
+## Security rules
 
-## PWA installation
-
-The project includes `manifest.webmanifest`, `sw.js`, and 192/512px icons. To install it as a PWA, it must be hosted on an HTTPS origin (or localhost for development). Opening `index.html` as a local file is suitable for UI review but does not provide normal PWA installation. The service worker caches the app shell, but the app remains read-only for business transactions while offline.
-
-## Reports
-
-- PDF: use **PDF / Print** and choose “Save as PDF” in the browser print dialog.
-- Excel: the demo attempts to load SheetJS when the export action is selected. If the library cannot be reached, it downloads an Excel-compatible CSV fallback. For production, bundle and test a maintained XLSX export library or generate XLSX on the server.
-
-## Remaining brand asset
-
-The homepage uses the Ananta Vastra brand mark in this prototype. The approved Namakkal Anjaneyar devotional photograph must be sourced and its reuse/licence confirmed before it is included in a public deployment.
-
-## Backend foundation
-
-`supabase/schema.sql` is a starter PostgreSQL/Supabase schema with Row Level Security policies and transactional RPC foundations for paper-bill entry, stock addition, Admin corrections/cancellation, stock adjustment and supplier invoice/payment recording.
-
-`supabase/functions/deactivate-employee/index.ts` is an example Edge Function for Admin-only employee deactivation and global session revocation.
-
-**The browser demo is not wired to this backend foundation.** Before real use, a Supabase project must be created, the schema reviewed and applied, missing catalogue/cashbook RPCs completed, the Edge Function deployed, authentication and realtime connected, storage policies configured for product photos, and security/backup/restore tests passed. Never put the Supabase `service_role` key in browser code.
-
-## Project contents
-
-- `index.html` — interactive mobile-first UI and demo logic
-- `manifest.webmanifest` — PWA metadata
-- `sw.js` — app-shell service worker
-- `icon-192.png`, `icon-512.png` — PWA icons
-- `supabase/schema.sql` — backend schema and RLS/RPC foundation
-- `supabase/functions/deactivate-employee/index.ts` — example secure deactivation function
-- `FINAL_SPECIFICATION.md` — consolidated approved requirements
-- `PRODUCTION_CHECKLIST.md` — go-live security and deployment checklist
-- `screenshots/` — mobile UI preview images
+- Exactly one owner Admin profile.
+- No public self-registration.
+- Admin creates and manages Sales accounts.
+- Sales cannot read purchase costs, customer purchase history, Cashbook, refunds or Admin activity logs.
+- Direct table writes are revoked; business writes use audited server-side RPCs.
+- Never commit a Supabase secret/service-role key or database password.

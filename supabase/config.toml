@@ -1,0 +1,4 @@
+project_id = "ananta-vastra"
+
+[functions.manage-sales-employee]
+verify_jwt = true
