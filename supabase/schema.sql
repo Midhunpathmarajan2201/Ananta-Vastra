@@ -235,35 +235,56 @@ alter table public.app_notifications enable row level security;
 alter table public.activity_log enable row level security;
 
 drop policy if exists profile_read_self_or_admin on public.profiles;
+drop policy if exists profile_read_self_or_admin on public.profiles;
 create policy profile_read_self_or_admin on public.profiles for select to authenticated using (public.is_active_user() and (id=auth.uid() or public.is_admin()));
+drop policy if exists profile_admin_update on public.profiles;
 drop policy if exists profile_admin_update on public.profiles;
 create policy profile_admin_update on public.profiles for update to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- Shared read access for active users; only Admin can create/update/archive catalogue data.
+drop policy if exists categories_read_active on public.categories;
 create policy categories_read_active on public.categories for select to authenticated using (public.is_active_user() and is_active=true);
+drop policy if exists categories_admin_all on public.categories;
 create policy categories_admin_all on public.categories for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists products_read_active on public.products;
 create policy products_read_active on public.products for select to authenticated using (public.is_active_user() and is_archived=false);
+drop policy if exists products_admin_all on public.products;
 create policy products_admin_all on public.products for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists variants_read_active on public.product_variants;
 create policy variants_read_active on public.product_variants for select to authenticated using (public.is_active_user() and is_active=true);
+drop policy if exists variants_admin_all on public.product_variants;
 create policy variants_admin_all on public.product_variants for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- Customer purchase history is Admin-only. Sales customer aliases should be resolved through a limited RPC.
+drop policy if exists customers_admin_all on public.customers;
 create policy customers_admin_all on public.customers for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists customer_aliases_admin_all on public.customer_aliases;
 create policy customer_aliases_admin_all on public.customer_aliases for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 -- Sales can view their own records; Admin can view all. Bills are inserted/corrected only through RPCs.
+drop policy if exists paper_bills_read on public.paper_bills;
 create policy paper_bills_read on public.paper_bills for select to authenticated using (public.is_active_user() and (public.is_admin() or entered_by=auth.uid() or sold_by=auth.uid()));
+drop policy if exists paper_bill_items_read on public.paper_bill_items;
 create policy paper_bill_items_read on public.paper_bill_items for select to authenticated using (public.is_active_user() and exists(select 1 from public.paper_bills b where b.id=bill_id and (public.is_admin() or b.entered_by=auth.uid() or b.sold_by=auth.uid())));
+drop policy if exists stock_movements_read on public.stock_movements;
 create policy stock_movements_read on public.stock_movements for select to authenticated using (public.is_active_user() and (public.is_admin() or performed_by=auth.uid()));
 
 -- Financial and supplier records are Admin-only.
+drop policy if exists cashbook_admin_all on public.cashbook_expenses;
 create policy cashbook_admin_all on public.cashbook_expenses for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists suppliers_admin_all on public.suppliers;
 create policy suppliers_admin_all on public.suppliers for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists supplier_invoices_admin_all on public.supplier_invoices;
 create policy supplier_invoices_admin_all on public.supplier_invoices for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists supplier_invoice_items_admin_all on public.supplier_invoice_items;
 create policy supplier_invoice_items_admin_all on public.supplier_invoice_items for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists supplier_payments_admin_all on public.supplier_payments;
 create policy supplier_payments_admin_all on public.supplier_payments for all to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists notifications_admin_read on public.app_notifications;
 create policy notifications_admin_read on public.app_notifications for select to authenticated using (public.is_active_user() and (public.is_admin() or target_role in ('sales','all')));
+drop policy if exists notifications_admin_update on public.app_notifications;
 create policy notifications_admin_update on public.app_notifications for update to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists activity_admin_read on public.activity_log;
 create policy activity_admin_read on public.activity_log for select to authenticated using (public.is_admin());
 
 -- The client must not update stock quantities or write bills directly. Use these transactional RPCs.
@@ -575,3 +596,488 @@ grant execute on function public.is_admin() to authenticated;
 -- 7. Configure realtime for the relevant tables and test it with separate Admin/Sales users.
 -- 8. Configure push delivery, backups and a tested restore procedure.
 -- 9. Run a full RLS/security test matrix before importing real business data.
+
+
+-- =============================================================================
+-- PRODUCTION COMPLETION LAYER (2026-11-16)
+-- This file is the single SQL Editor script. Run it once in a fresh Supabase
+-- project, or rerun safely after the original schema has already been applied.
+-- It deliberately does not create Auth users or store passwords.
+-- =============================================================================
+
+-- Case-insensitive uniqueness for human-entered identifiers.
+create unique index if not exists profiles_username_ci on public.profiles(lower(trim(username)));
+create unique index if not exists categories_name_ci on public.categories(lower(trim(name)));
+create unique index if not exists products_code_ci on public.products(lower(trim(product_code)));
+
+-- The original profile update policy allowed broad direct profile edits. Remove
+-- it: profile lifecycle is now performed through narrowly scoped RPCs.
+drop policy if exists profile_admin_update on public.profiles;
+
+-- Ensure all existing policies can be safely recreated on subsequent runs.
+drop policy if exists categories_read_active on public.categories;
+drop policy if exists categories_admin_all on public.categories;
+drop policy if exists products_read_active on public.products;
+drop policy if exists products_admin_all on public.products;
+drop policy if exists variants_read_active on public.product_variants;
+drop policy if exists variants_admin_all on public.product_variants;
+drop policy if exists customers_admin_all on public.customers;
+drop policy if exists customer_aliases_admin_all on public.customer_aliases;
+drop policy if exists paper_bills_read on public.paper_bills;
+drop policy if exists paper_bill_items_read on public.paper_bill_items;
+drop policy if exists stock_movements_read on public.stock_movements;
+drop policy if exists cashbook_admin_all on public.cashbook_expenses;
+drop policy if exists suppliers_admin_all on public.suppliers;
+drop policy if exists supplier_invoices_admin_all on public.supplier_invoices;
+drop policy if exists supplier_invoice_items_admin_all on public.supplier_invoice_items;
+drop policy if exists supplier_payments_admin_all on public.supplier_payments;
+drop policy if exists notifications_admin_read on public.app_notifications;
+drop policy if exists notifications_admin_update on public.app_notifications;
+drop policy if exists activity_admin_read on public.activity_log;
+
+create policy categories_read_active on public.categories for select to authenticated
+  using (public.is_active_user() and is_active=true);
+create policy categories_admin_all on public.categories for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy products_read_active on public.products for select to authenticated
+  using (public.is_active_user() and is_archived=false);
+create policy products_admin_all on public.products for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy variants_read_active on public.product_variants for select to authenticated
+  using (public.is_active_user() and is_active=true);
+create policy variants_admin_all on public.product_variants for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy customers_admin_all on public.customers for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy customer_aliases_admin_all on public.customer_aliases for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy paper_bills_read on public.paper_bills for select to authenticated
+  using (public.is_active_user() and (public.is_admin() or entered_by=auth.uid() or sold_by=auth.uid()));
+create policy paper_bill_items_read on public.paper_bill_items for select to authenticated
+  using (public.is_active_user() and exists(
+    select 1 from public.paper_bills b where b.id=bill_id
+    and (public.is_admin() or b.entered_by=auth.uid() or b.sold_by=auth.uid())
+  ));
+create policy stock_movements_read on public.stock_movements for select to authenticated
+  using (public.is_active_user() and (public.is_admin() or performed_by=auth.uid()));
+create policy cashbook_admin_all on public.cashbook_expenses for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy suppliers_admin_all on public.suppliers for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy supplier_invoices_admin_all on public.supplier_invoices for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy supplier_invoice_items_admin_all on public.supplier_invoice_items for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy supplier_payments_admin_all on public.supplier_payments for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy notifications_admin_read on public.app_notifications for select to authenticated
+  using (public.is_active_user() and (public.is_admin() or target_role in ('sales','all')));
+create policy notifications_admin_update on public.app_notifications for update to authenticated
+  using (public.is_admin()) with check (public.is_admin());
+create policy activity_admin_read on public.activity_log for select to authenticated
+  using (public.is_admin());
+
+-- Revoke broad table privileges. The browser receives read-only access and all
+-- writes go through the checked, transactional functions below.
+revoke all on all tables in schema public from anon, authenticated;
+grant select on public.profiles, public.categories, public.products,
+  public.customers, public.customer_aliases, public.paper_bills,
+  public.stock_movements, public.cashbook_expenses, public.suppliers,
+  public.supplier_invoices, public.supplier_invoice_items, public.supplier_payments,
+  public.app_notifications, public.activity_log to authenticated;
+grant select (id, product_id, color, size, stock_on_hand, damaged_qty,
+  pending_inspection_qty, selling_price, min_stock, is_active, created_at, archived_at)
+  on public.product_variants to authenticated;
+grant select (id, bill_id, variant_id, category_name_snapshot, product_name_snapshot,
+  product_code_snapshot, color_snapshot, size_snapshot, quantity,
+  unit_selling_price, line_total, created_at)
+  on public.paper_bill_items to authenticated;
+
+-- Admins need financial values through a dedicated RPC; Sales must never be
+-- able to select procurement prices or historical cost snapshots.
+create or replace function public.admin_variant_financials()
+returns table (
+  variant_id uuid, product_id uuid, purchase_price numeric,
+  cost_history jsonb, selling_price numeric, stock_on_hand integer,
+  invested_value numeric, potential_sales_value numeric
+)
+language plpgsql stable security definer set search_path=public,pg_temp
+as $$
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  return query
+    select v.id, v.product_id, v.purchase_price, v.cost_history, v.selling_price,
+      v.stock_on_hand,
+      case when v.purchase_price is null then null
+           else v.stock_on_hand * v.purchase_price end,
+      v.stock_on_hand * v.selling_price
+    from public.product_variants v
+    where v.is_active=true;
+end $$;
+
+-- Admin-only catalogue management. Products and variants are never hard-deleted.
+create or replace function public.admin_create_category(p_name text,p_prefix text)
+returns uuid language plpgsql security definer set search_path=public,pg_temp
+as $$
+declare v_id uuid;
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if trim(coalesce(p_name,''))='' or upper(trim(coalesce(p_prefix,''))) !~ '^[A-Z0-9-]{1,12}$'
+    then raise exception 'Valid category name and prefix are required'; end if;
+  insert into public.categories(name,code_prefix,created_by)
+    values(trim(p_name),upper(trim(p_prefix)),auth.uid()) returning id into v_id;
+  insert into public.activity_log(actor_id,action,entity_type,entity_id,details)
+    values(auth.uid(),'category_created','category',v_id,jsonb_build_object('name',p_name,'prefix',p_prefix));
+  return v_id;
+end $$;
+
+create or replace function public.admin_archive_category(p_category_id uuid)
+returns void language plpgsql security definer set search_path=public,pg_temp
+as $$
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if exists(select 1 from public.products where category_id=p_category_id and is_archived=false)
+    then raise exception 'Move or archive all active products before archiving this category'; end if;
+  update public.categories set is_active=false where id=p_category_id;
+  if not found then raise exception 'Category not found'; end if;
+  insert into public.activity_log(actor_id,action,entity_type,entity_id)
+    values(auth.uid(),'category_archived','category',p_category_id);
+end $$;
+
+create or replace function public.admin_create_product(
+  p_category_id uuid,p_name text,p_product_code text,p_notes text default null
+) returns uuid language plpgsql security definer set search_path=public,pg_temp
+as $$
+declare v_id uuid; v_prefix text;
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if trim(coalesce(p_name,''))='' or trim(coalesce(p_product_code,''))='' then
+    raise exception 'Product name and product code are required'; end if;
+  select code_prefix into v_prefix from public.categories
+    where id=p_category_id and is_active=true;
+  if not found then raise exception 'Active category not found'; end if;
+  if upper(trim(p_product_code)) not like upper(v_prefix)||'%' then
+    raise exception 'Product code must begin with category prefix '||v_prefix; end if;
+  insert into public.products(category_id,name,product_code,notes,created_by)
+    values(p_category_id,trim(p_name),upper(trim(p_product_code)),p_notes,auth.uid())
+    returning id into v_id;
+  insert into public.activity_log(actor_id,action,entity_type,entity_id,details)
+    values(auth.uid(),'product_created','product',v_id,jsonb_build_object('product_code',p_product_code));
+  return v_id;
+end $$;
+
+create or replace function public.admin_create_variant(
+  p_product_id uuid,p_color text,p_size text,p_selling_price numeric,p_min_stock integer default 0
+) returns uuid language plpgsql security definer set search_path=public,pg_temp
+as $$
+declare v_id uuid;
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if p_selling_price<0 or p_min_stock<0 then raise exception 'Price and threshold cannot be negative'; end if;
+  if not exists(select 1 from public.products where id=p_product_id and is_archived=false) then
+    raise exception 'Active product not found'; end if;
+  insert into public.product_variants(product_id,color,size,selling_price,min_stock)
+    values(p_product_id,nullif(trim(p_color),''),nullif(trim(p_size),''),p_selling_price,p_min_stock)
+    returning id into v_id;
+  insert into public.activity_log(actor_id,action,entity_type,entity_id,details)
+    values(auth.uid(),'variant_created','product_variant',v_id,
+      jsonb_build_object('color',p_color,'size',p_size,'selling_price',p_selling_price));
+  return v_id;
+end $$;
+
+create or replace function public.admin_update_variant_pricing(
+  p_variant_id uuid,p_selling_price numeric,p_purchase_price numeric
+) returns void language plpgsql security definer set search_path=public,pg_temp
+as $$
+declare v public.product_variants%rowtype;
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if p_selling_price<0 or (p_purchase_price is not null and p_purchase_price<0)
+    then raise exception 'Prices cannot be negative'; end if;
+  select * into v from public.product_variants where id=p_variant_id for update;
+  if not found then raise exception 'Variant not found'; end if;
+  update public.product_variants set selling_price=p_selling_price,
+    purchase_price=p_purchase_price,
+    cost_history=case when p_purchase_price is distinct from v.purchase_price
+      then cost_history||jsonb_build_array(jsonb_build_object(
+        'previous_price',v.purchase_price,'new_price',p_purchase_price,
+        'changed_at',now(),'changed_by',auth.uid()))
+      else cost_history end
+    where id=p_variant_id;
+  insert into public.activity_log(actor_id,action,entity_type,entity_id,details)
+    values(auth.uid(),'variant_pricing_updated','product_variant',p_variant_id,
+      jsonb_build_object('selling_price',p_selling_price,'purchase_price_changed',
+        p_purchase_price is distinct from v.purchase_price));
+end $$;
+
+create or replace function public.admin_set_variant_low_stock(p_variant_id uuid,p_min_stock integer)
+returns void language plpgsql security definer set search_path=public,pg_temp
+as $$
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if p_min_stock<0 then raise exception 'Threshold cannot be negative'; end if;
+  update public.product_variants set min_stock=p_min_stock where id=p_variant_id;
+  if not found then raise exception 'Variant not found'; end if;
+end $$;
+
+create or replace function public.admin_archive_product(p_product_id uuid)
+returns void language plpgsql security definer set search_path=public,pg_temp
+as $$
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  update public.products set is_archived=true,archived_at=now() where id=p_product_id;
+  if not found then raise exception 'Product not found'; end if;
+  update public.product_variants set is_active=false,archived_at=now() where product_id=p_product_id;
+  insert into public.activity_log(actor_id,action,entity_type,entity_id)
+    values(auth.uid(),'product_archived','product',p_product_id);
+end $$;
+
+-- Auth users are created in Supabase Auth first. This RPC attaches an existing
+-- Auth UUID to a Sales profile; it never accepts or stores a password.
+create or replace function public.admin_add_sales_profile(
+  p_auth_user_id uuid,p_full_name text,p_username text
+) returns uuid language plpgsql security definer set search_path=public,pg_temp
+as $$
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if trim(coalesce(p_full_name,''))='' or trim(coalesce(p_username,''))='' then
+    raise exception 'Employee name and username are required'; end if;
+  if not exists(select 1 from auth.users where id=p_auth_user_id) then
+    raise exception 'Create the employee in Supabase Auth before adding the profile'; end if;
+  insert into public.profiles(id,full_name,username,role,is_active)
+    values(p_auth_user_id,trim(p_full_name),trim(p_username),'sales',true);
+  insert into public.activity_log(actor_id,action,entity_type,entity_id,details)
+    values(auth.uid(),'sales_profile_created','profile',p_auth_user_id,jsonb_build_object('username',p_username));
+  return p_auth_user_id;
+end $$;
+
+create or replace function public.admin_set_sales_active(p_profile_id uuid,p_active boolean)
+returns void language plpgsql security definer set search_path=public,pg_temp
+as $$
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if exists(select 1 from public.profiles where id=p_profile_id and role='admin') then
+    raise exception 'The owner Admin account cannot be deactivated here'; end if;
+  update public.profiles set is_active=p_active,
+    deactivated_at=case when p_active then null else now() end
+    where id=p_profile_id and role='sales';
+  if not found then raise exception 'Sales profile not found'; end if;
+  insert into public.activity_log(actor_id,action,entity_type,entity_id,details)
+    values(auth.uid(),case when p_active then 'sales_reactivated' else 'sales_deactivated' end,
+      'profile',p_profile_id,jsonb_build_object('is_active',p_active));
+end $$;
+
+-- Cashbook expense entry. Bill collections are generated from posted bills below.
+create or replace function public.admin_record_cashbook_expense(
+  p_expense_date date,p_category text,p_description text,p_amount numeric,p_payment_method text
+) returns uuid language plpgsql security definer set search_path=public,pg_temp
+as $$
+declare v_id uuid;
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if trim(coalesce(p_category,''))='' or trim(coalesce(p_description,''))='' or p_amount<=0
+    or p_payment_method not in ('Cash','UPI') then raise exception 'Invalid expense details'; end if;
+  insert into public.cashbook_expenses(expense_date,category,description,amount,payment_method,created_by)
+    values(p_expense_date,trim(p_category),trim(p_description),p_amount,p_payment_method,auth.uid())
+    returning id into v_id;
+  insert into public.activity_log(actor_id,action,entity_type,entity_id,details)
+    values(auth.uid(),'cashbook_expense_recorded','cashbook_expense',v_id,
+      jsonb_build_object('amount',p_amount,'payment_method',p_payment_method));
+  return v_id;
+end $$;
+
+create or replace view public.admin_cashbook_entries
+with (security_invoker=true) as
+  select b.id as source_id,b.bill_date as entry_date,'Bill collection'::text as entry_type,
+    b.physical_bill_number as reference,b.customer_name_snapshot as description,
+    b.cash_amount as cash_amount,b.upi_amount as upi_amount,0::numeric as expense_amount
+  from public.paper_bills b where b.status='posted'
+  union all
+  select e.id,e.expense_date,'Expense',null,e.category||' — '||e.description,
+    case when e.payment_method='Cash' then 0::numeric else 0::numeric end,
+    case when e.payment_method='UPI' then 0::numeric else 0::numeric end,
+    e.amount
+  from public.cashbook_expenses e;
+grant select on public.admin_cashbook_entries to authenticated;
+
+create or replace function public.admin_dashboard_summary(p_from date,p_to date)
+returns jsonb language plpgsql stable security definer set search_path=public,pg_temp
+as $$
+declare v jsonb;
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if p_from is null or p_to is null or p_from>p_to then raise exception 'Valid report dates required'; end if;
+  select jsonb_build_object(
+    'bill_count',count(distinct b.id),
+    'sales_value',coalesce(sum(distinct b.final_amount),0),
+    'cash_collected',coalesce((select sum(x.cash_amount) from public.paper_bills x where x.status='posted' and x.bill_date between p_from and p_to),0),
+    'upi_collected',coalesce((select sum(x.upi_amount) from public.paper_bills x where x.status='posted' and x.bill_date between p_from and p_to),0),
+    'pieces_sold',coalesce((select sum(i.quantity) from public.paper_bill_items i join public.paper_bills x on x.id=i.bill_id where x.status='posted' and x.bill_date between p_from and p_to),0),
+    'low_stock_variants',(select count(*) from public.product_variants v where v.is_active=true and v.stock_on_hand<=v.min_stock),
+    'available_pieces',(select coalesce(sum(v.stock_on_hand),0) from public.product_variants v where v.is_active=true),
+    'expense_total',(select coalesce(sum(e.amount),0) from public.cashbook_expenses e where e.expense_date between p_from and p_to)
+  ) into v
+  from public.paper_bills b
+  where b.status='posted' and b.bill_date between p_from and p_to;
+  return v;
+end $$;
+
+create or replace function public.sales_dashboard_summary(p_from date,p_to date)
+returns jsonb language plpgsql stable security definer set search_path=public,pg_temp
+as $$
+declare v jsonb;
+begin
+  if not public.is_active_user() then raise exception 'Active account required'; end if;
+  if public.is_admin() then raise exception 'Use the Admin dashboard summary'; end if;
+  if p_from is null or p_to is null or p_from>p_to then raise exception 'Valid report dates required'; end if;
+  select jsonb_build_object(
+    'bill_count',count(distinct b.id),
+    'sales_value',coalesce(sum(distinct b.final_amount),0),
+    'pieces_sold',coalesce((select sum(i.quantity) from public.paper_bill_items i join public.paper_bills x on x.id=i.bill_id where x.entered_by=auth.uid() and x.status='posted' and x.bill_date between p_from and p_to),0)
+  ) into v
+  from public.paper_bills b
+  where b.entered_by=auth.uid() and b.status='posted' and b.bill_date between p_from and p_to;
+  return v;
+end $$;
+
+create or replace function public.admin_top_selling_products(p_from date,p_to date,p_limit integer default 10)
+returns table(product_name text,product_code text,pieces_sold bigint)
+language plpgsql stable security definer set search_path=public,pg_temp
+as $$
+begin
+  if not public.is_admin() then raise exception 'Admin permission required'; end if;
+  if p_from is null or p_to is null or p_from>p_to or p_limit<1 or p_limit>100
+    then raise exception 'Invalid report range or limit'; end if;
+  return query
+    select i.product_name_snapshot,i.product_code_snapshot,sum(i.quantity)::bigint
+    from public.paper_bill_items i join public.paper_bills b on b.id=i.bill_id
+    where b.status='posted' and b.bill_date between p_from and p_to
+    group by i.product_name_snapshot,i.product_code_snapshot
+    order by sum(i.quantity) desc limit p_limit;
+end $$;
+
+create or replace function public.mark_notification_read(p_notification_id uuid)
+returns void language plpgsql security definer set search_path=public,pg_temp
+as $$
+begin
+  if not public.is_active_user() then raise exception 'Active account required'; end if;
+  update public.app_notifications
+    set read_by=array(select distinct x from unnest(read_by||array[auth.uid()]) x)
+    where id=p_notification_id
+      and (public.is_admin() or target_role in ('sales','all'));
+  if not found then raise exception 'Notification not found or not available'; end if;
+end $$;
+
+-- Private product image bucket. Storage policies preserve the same Admin/Sales split.
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values('product-photos','product-photos',false,5242880,array['image/jpeg','image/png','image/webp'])
+on conflict(id) do update set public=false,file_size_limit=5242880,
+  allowed_mime_types=array['image/jpeg','image/png','image/webp'];
+drop policy if exists product_photos_authenticated_read on storage.objects;
+create policy product_photos_authenticated_read on storage.objects for select to authenticated
+  using (bucket_id='product-photos' and public.is_active_user());
+drop policy if exists product_photos_admin_insert on storage.objects;
+create policy product_photos_admin_insert on storage.objects for insert to authenticated
+  with check (bucket_id='product-photos' and public.is_admin());
+drop policy if exists product_photos_admin_update on storage.objects;
+create policy product_photos_admin_update on storage.objects for update to authenticated
+  using (bucket_id='product-photos' and public.is_admin())
+  with check (bucket_id='product-photos' and public.is_admin());
+drop policy if exists product_photos_admin_delete on storage.objects;
+create policy product_photos_admin_delete on storage.objects for delete to authenticated
+  using (bucket_id='product-photos' and public.is_admin());
+
+-- Initial category catalogue. These are safe defaults and can be renamed by Admin.
+insert into public.categories(name,code_prefix,is_active)
+values
+ ('2-piece chudi','2PC-',true),('3-piece chudi','3PC-',true),('Tops','TOP-',true),
+ ('Dupatta','DUP-',true),('Legging','LEG-',true),('Shawl','SHW-',true),
+ ('Blouse','BLO-',true),('Saree','SAR-',true),('Petticoat','PET-',true)
+on conflict(name) do nothing;
+
+-- Restrict function execution to signed-in users. Each function performs its own
+-- role check; no anonymous browser session can execute business operations.
+revoke all on function public.admin_variant_financials() from public,anon;
+revoke all on function public.admin_create_category(text,text) from public,anon;
+revoke all on function public.admin_archive_category(uuid) from public,anon;
+revoke all on function public.admin_create_product(uuid,text,text,text) from public,anon;
+revoke all on function public.admin_create_variant(uuid,text,text,numeric,integer) from public,anon;
+revoke all on function public.admin_update_variant_pricing(uuid,numeric,numeric) from public,anon;
+revoke all on function public.admin_set_variant_low_stock(uuid,integer) from public,anon;
+revoke all on function public.admin_archive_product(uuid) from public,anon;
+revoke all on function public.admin_add_sales_profile(uuid,text,text) from public,anon;
+revoke all on function public.admin_set_sales_active(uuid,boolean) from public,anon;
+revoke all on function public.admin_record_cashbook_expense(date,text,text,numeric,text) from public,anon;
+revoke all on function public.admin_dashboard_summary(date,date) from public,anon;
+revoke all on function public.sales_dashboard_summary(date,date) from public,anon;
+revoke all on function public.admin_top_selling_products(date,date,integer) from public,anon;
+revoke all on function public.mark_notification_read(uuid) from public,anon;
+grant execute on function public.admin_variant_financials() to authenticated;
+grant execute on function public.admin_create_category(text,text) to authenticated;
+grant execute on function public.admin_archive_category(uuid) to authenticated;
+grant execute on function public.admin_create_product(uuid,text,text,text) to authenticated;
+grant execute on function public.admin_create_variant(uuid,text,text,numeric,integer) to authenticated;
+grant execute on function public.admin_update_variant_pricing(uuid,numeric,numeric) to authenticated;
+grant execute on function public.admin_set_variant_low_stock(uuid,integer) to authenticated;
+grant execute on function public.admin_archive_product(uuid) to authenticated;
+grant execute on function public.admin_add_sales_profile(uuid,text,text) to authenticated;
+grant execute on function public.admin_set_sales_active(uuid,boolean) to authenticated;
+grant execute on function public.admin_record_cashbook_expense(date,text,text,numeric,text) to authenticated;
+grant execute on function public.admin_dashboard_summary(date,date) to authenticated;
+grant execute on function public.sales_dashboard_summary(date,date) to authenticated;
+grant execute on function public.admin_top_selling_products(date,date,integer) to authenticated;
+grant execute on function public.mark_notification_read(uuid) to authenticated;
+
+grant execute on function public.is_active_user() to authenticated;
+grant execute on function public.is_admin() to authenticated;
+
+-- Revoke direct write access even if project default privileges were broadened.
+revoke insert,update,delete,truncate,references,trigger on all tables in schema public from anon,authenticated;
+
+-- Re-grant only SELECT to authenticated; all business mutations are RPC-only.
+grant select on public.profiles,public.categories,public.products,public.customers,
+  public.customer_aliases,public.paper_bills,public.stock_movements,
+  public.cashbook_expenses,public.suppliers,public.supplier_invoices,
+  public.supplier_invoice_items,public.supplier_payments,public.app_notifications,
+  public.activity_log,public.admin_cashbook_entries to authenticated;
+grant select (id,product_id,color,size,stock_on_hand,damaged_qty,pending_inspection_qty,
+  selling_price,min_stock,is_active,created_at,archived_at)
+  on public.product_variants to authenticated;
+grant select (id,bill_id,variant_id,category_name_snapshot,product_name_snapshot,
+  product_code_snapshot,color_snapshot,size_snapshot,quantity,unit_selling_price,line_total,created_at)
+  on public.paper_bill_items to authenticated;
+
+-- Add operational tables to Supabase Realtime if the publication is available.
+do $$
+declare t text;
+begin
+  if exists(select 1 from pg_publication where pubname='supabase_realtime') then
+    foreach t in array array['categories','products','product_variants','paper_bills',
+      'paper_bill_items','stock_movements','app_notifications','profiles'] loop
+      if not exists(
+        select 1 from pg_publication_tables
+        where pubname='supabase_realtime' and schemaname='public' and tablename=t
+      ) then
+        execute format('alter publication supabase_realtime add table public.%I',t);
+      end if;
+    end loop;
+  end if;
+end $$;
+
+-- =============================================================================
+-- FIRST-OWNER BOOTSTRAP (run manually after creating the owner in Supabase Auth)
+-- 1. Dashboard > Authentication > Users > Add user; enter owner's email/password.
+-- 2. Copy that Auth user's UUID.
+-- 3. Replace the two placeholders below and run this INSERT once in SQL Editor.
+--    Passwords are managed only by Supabase Auth; never add them to this SQL file.
+--
+-- insert into public.profiles(id,full_name,username,role,is_active)
+-- values ('AUTH_USER_UUID_HERE','Shop Owner','admin','admin',true);
+--
+-- Sales accounts: create each employee in Authentication first, then sign in as
+-- Admin and call admin_add_sales_profile(existing_auth_uuid, full_name, username).
+-- Deactivation: call admin_set_sales_active(profile_uuid,false); this immediately
+-- blocks DB access through RLS, even while an old access token still exists.
+-- For global refresh-token revocation, deploy a trusted Edge Function using the
+-- server-only service-role secret; never put that secret in browser code.
+-- =============================================================================
