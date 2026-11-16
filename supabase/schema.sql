@@ -902,25 +902,23 @@ grant select on public.admin_cashbook_entries to authenticated;
 
 create or replace function public.admin_dashboard_summary(p_from date,p_to date)
 returns jsonb language plpgsql stable security definer set search_path=public,pg_temp
-as $$
+as $
 declare v jsonb;
 begin
   if not public.is_admin() then raise exception 'Admin permission required'; end if;
   if p_from is null or p_to is null or p_from>p_to then raise exception 'Valid report dates required'; end if;
   select jsonb_build_object(
-    'bill_count',count(distinct b.id),
-    'sales_value',coalesce(sum(distinct b.final_amount),0),
-    'cash_collected',coalesce((select sum(x.cash_amount) from public.paper_bills x where x.status='posted' and x.bill_date between p_from and p_to),0),
-    'upi_collected',coalesce((select sum(x.upi_amount) from public.paper_bills x where x.status='posted' and x.bill_date between p_from and p_to),0),
-    'pieces_sold',coalesce((select sum(i.quantity) from public.paper_bill_items i join public.paper_bills x on x.id=i.bill_id where x.status='posted' and x.bill_date between p_from and p_to),0),
+    'bill_count',(select count(*) from public.paper_bills b where b.status='posted' and b.bill_date between p_from and p_to),
+    'sales_value',(select coalesce(sum(b.final_amount),0) from public.paper_bills b where b.status='posted' and b.bill_date between p_from and p_to),
+    'cash_collected',(select coalesce(sum(x.cash_amount),0) from public.paper_bills x where x.status='posted' and x.bill_date between p_from and p_to),
+    'upi_collected',(select coalesce(sum(x.upi_amount),0) from public.paper_bills x where x.status='posted' and x.bill_date between p_from and p_to),
+    'pieces_sold',(select coalesce(sum(i.quantity),0) from public.paper_bill_items i join public.paper_bills x on x.id=i.bill_id where x.status='posted' and x.bill_date between p_from and p_to),
     'low_stock_variants',(select count(*) from public.product_variants v where v.is_active=true and v.stock_on_hand<=v.min_stock),
     'available_pieces',(select coalesce(sum(v.stock_on_hand),0) from public.product_variants v where v.is_active=true),
     'expense_total',(select coalesce(sum(e.amount),0) from public.cashbook_expenses e where e.expense_date between p_from and p_to)
-  ) into v
-  from public.paper_bills b
-  where b.status='posted' and b.bill_date between p_from and p_to;
+  ) into v;
   return v;
-end $$;
+end $;
 
 create or replace function public.sales_dashboard_summary(p_from date,p_to date)
 returns jsonb language plpgsql stable security definer set search_path=public,pg_temp
